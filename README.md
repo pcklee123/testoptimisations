@@ -24,3 +24,14 @@ __kernel void multiply_arrays(__global float *a, __global float *b,
   for (size_t j = 0; j < 4096; ++j)
     c[i] *= (c[i] + 1.0) * (a[i] + 1.0) * (b[i] + 1.0);
 }
+
+n=1024*1024;
+Method 1 Elapsed time: 16642 ms
+Method 2 Elapsed time: 390 ms
+
+source loaded
+Method 3 Elapsed time: 322 ms thread0: Using OpenCL device: gfx90c
+
+Method 3 Elapsed time: 173 ms thread1: Using OpenCL device: gfx1032
+
+Method 3 Elapsed time: 172 ms thread2: Using OpenCL device: gfx1032
