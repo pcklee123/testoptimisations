@@ -1,4 +1,5 @@
 #include <iostream>
+#include <fstream>
 #include <chrono>
 #include <cstdlib>     // for rand()
 #include <immintrin.h> // Include AVX-512 intrinsics

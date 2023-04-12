@@ -1,12 +1,5 @@
 #include "main.h"
 
-const char *kernelSource =
-    "__kernel void multiply_arrays(__global float* a, __global float* b, __global float* c) {\n"
-    "   size_t i = get_global_id(0);\n"
-    "   c[i] = a[i] * b[i];\n"
-    "   for(size_t j=0;j<1024;++j) c[i] *= (c[i] + 1.0) * (a[i] + 1.0) * (b[i] + 1.0);"
-    "}\n";
-
 int main()
 {
     const size_t n = 1024 * 1024;
@@ -77,7 +70,11 @@ int main()
     context = clCreateContext(NULL, 1, &device[d], NULL, NULL, &status);
 
     // Create the program
-    program = clCreateProgramWithSource(context, 1, (const char **)&kernelSource, NULL, &status);
+    std::ifstream t("cl_kernel_code.cl");
+    std::string kernel_code((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
+    const char *kernel_source = kernel_code.c_str();
+    const char **source = &kernel_source;
+    program = clCreateProgramWithSource(context, 1, source, NULL, &status);
     // Build the program
     status = clBuildProgram(program, 1, &device[d], NULL, NULL, NULL);
 
