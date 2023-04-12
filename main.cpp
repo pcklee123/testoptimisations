@@ -13,7 +13,7 @@ const char *kernelSource =
     "__kernel void multiply_arrays(__global float* a, __global float* b, __global float* c) {\n"
     "   size_t i = get_global_id(0);\n"
     "   c[i] = a[i] * b[i];\n"
-    "   for(size_t j=0;j<256;++j) c[i] *= (c[i] + 1.0) * (a[i] + 1.0) * (b[i] + 1.0);"
+    "   for(size_t j=0;j<1024;++j) c[i] *= (c[i] + 1.0) * (a[i] + 1.0) * (b[i] + 1.0);"
     "}\n";
 
 int main()
@@ -26,7 +26,7 @@ int main()
     float *c2 = (float *)_mm_malloc(n * sizeof(float), 32);
     float *c3 = (float *)_mm_malloc(n * sizeof(float), 32);
 // Initialize a and b with random values
-#pragma omp parallel for
+#pragma omp parallel for simd
     for (size_t i = 0; i < n; i++)
     {
         a[i] = (float)rand() / RAND_MAX;
@@ -35,12 +35,12 @@ int main()
 
     // Perform the element-wise multiplication
     auto start_time = std::chrono::high_resolution_clock::now();
-#pragma omp parallel for 
+//#pragma omp parallel for 
     for (size_t i = 0; i < n; i++)
     {
         c1[i] = a[i] * b[i];
-#pragma omp parallel for simd
-        for (size_t j = 0; j < 256; j++)
+//#pragma omp parallel for// this wont work cause the data is not continuous and may cause slowdown
+        for (size_t j = 0; j < 1024; j++)
             c1[i] *= (c1[i] + 1.0) * (a[i] + 1.0) * (b[i] + 1.0);
     }
 
@@ -51,15 +51,14 @@ int main()
 
     // Multiply a and b element-wise and store the result in c and then do a lot more multiplications
     start_time = std::chrono::high_resolution_clock::now();
-#pragma omp parallel for simd
+#pragma omp parallel for
     for (size_t i = 0; i < n; i++)
         c2[i] = a[i] * b[i];
-    for (size_t j = 0; j < 256; j++)
+    for (size_t j = 0; j < 1024; j++)
         for (size_t i = 0; i < n; i++)
             c2[i] *= (c2[i] + 1.0) * (a[i] + 1.0) * (b[i] + 1.0);
     end_time = std::chrono::high_resolution_clock::now();
     elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-
     std::cout << "#pragma omp parallel for (better) Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
     // print differences
     for (size_t i = 0; i < n; i++)
@@ -129,11 +128,11 @@ int main()
     status = clEnqueueReadBuffer(queue, bufferC, CL_TRUE, 0, n * sizeof(float), c3, 0, NULL, NULL);
     end_time = std::chrono::high_resolution_clock::now();
     elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    std::cout << "OpenCL multiply Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
+    std::cout << "OpenCL Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
     // print differences
     for (size_t i = 0; i < n; i++)
     {
-        if (c2[i] != c3[i])
+        if (c1[i] != c3[i])
             std::cout << i << ",";
     }
     std::cout << std::endl;
