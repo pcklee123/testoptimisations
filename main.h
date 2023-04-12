@@ -11,14 +11,16 @@
 #include <CL/cl.h>
 
 // OpenCL variables
+#define max_cl_dev 3
+//cl_platform_id platform[max_cl_dev];
 cl_platform_id platform;
-cl_device_id device[3];
-cl_context context;
-cl_command_queue queue;
-cl_program program;
-cl_kernel kernel;
-cl_mem bufferA, bufferB, bufferC;
-cl_int status;
-cl_int err;
+cl_device_id device[max_cl_dev];
+cl_context context[max_cl_dev];
+cl_command_queue queue[max_cl_dev];
+cl_program program[max_cl_dev];
+cl_kernel kernel[max_cl_dev];
+cl_mem bufferA[max_cl_dev], bufferB[max_cl_dev], bufferC[max_cl_dev];
+//cl_int status[max_cl_dev];
+//cl_int err[max_cl_dev];
+cl_int status1;
 cl_uint num_devices;
-int d = 1; // OpenCL device 0 1st device ,1 2nd device
