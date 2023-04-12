@@ -64,6 +64,7 @@
         "*.tcc": "cpp",
         "cwctype": "cpp",
         "numbers": "cpp",
-        "string_view": "cpp"
+        "string_view": "cpp",
+        "fstream": "cpp"
     }
 }

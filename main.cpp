@@ -32,7 +32,8 @@ int main()
 
     std::cout << "Method 1 Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
 
-    // do all elements and store the result in c before going on to the next step of calculations
+    // Method 2
+    //  do all elements and store the result in c before going on to the next step of calculations
     start_time = std::chrono::high_resolution_clock::now();
 #pragma omp parallel for
     for (size_t i = 0; i < n; i++)
@@ -54,66 +55,72 @@ int main()
     }
     std::cout << std::endl;
 
-    // Get the platform
-    status = clGetPlatformIDs(1, &platform, NULL);
-    // Get the device
-    status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 2, device, NULL);
-    // Get the device name
-    size_t device_name_size;
-    clGetDeviceInfo(device[d], CL_DEVICE_NAME, 0, NULL, &device_name_size);
-    char *device_name = new char[device_name_size];
-    clGetDeviceInfo(device[d], CL_DEVICE_NAME, device_name_size, device_name, NULL);
-    std::cout << "Using OpenCL device: " << device_name << std::endl;
-    delete[] device_name;
-
-    // Create the context
-    context = clCreateContext(NULL, 1, &device[d], NULL, NULL, &status);
-
-    // Create the program
+    // method 3
+    // load cl program source from file
     std::ifstream t("cl_kernel_code.cl");
     std::string kernel_code((std::istreambuf_iterator<char>(t)), std::istreambuf_iterator<char>());
     const char *kernel_source = kernel_code.c_str();
     const char **source = &kernel_source;
-    program = clCreateProgramWithSource(context, 1, source, NULL, &status);
-    // Build the program
-    status = clBuildProgram(program, 1, &device[d], NULL, NULL, NULL);
-
-    // Create the kernel
-    kernel = clCreateKernel(program, "multiply_arrays", &status);
-
-    // Create the command queue
-    cl_queue_properties properties[] = {CL_QUEUE_PROPERTIES, CL_QUEUE_PROFILING_ENABLE, 0};
-    queue = clCreateCommandQueueWithProperties(context, device[d], properties, &err);
-
-    // Create the buffers
-    bufferA = clCreateBuffer(context, CL_MEM_READ_ONLY, n * sizeof(float), NULL, &status);
-    bufferB = clCreateBuffer(context, CL_MEM_READ_ONLY, n * sizeof(float), NULL, &status);
-    bufferC = clCreateBuffer(context, CL_MEM_READ_WRITE, n * sizeof(float), NULL, &status);
-
-    start_time = std::chrono::high_resolution_clock::now();
-    // Copy data to the buffers
-    status = clEnqueueWriteBuffer(queue, bufferA, CL_TRUE, 0, n * sizeof(float), a, 0, NULL, NULL);
-    status = clEnqueueWriteBuffer(queue, bufferB, CL_TRUE, 0, n * sizeof(float), b, 0, NULL, NULL);
-    // Set the kernel arguments
-    status = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&bufferA);
-    status = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&bufferB);
-    status = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&bufferC);
-
-    // Execute the kernel
-    size_t globalWorkSize[1] = {n};
-    status = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, globalWorkSize, NULL, 0, NULL, NULL);
-
-    // Read the result from the buffer
-    status = clEnqueueReadBuffer(queue, bufferC, CL_TRUE, 0, n * sizeof(float), c3, 0, NULL, NULL);
-    end_time = std::chrono::high_resolution_clock::now();
-    elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    std::cout << "Method 3 Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
-    // print differences
-    for (size_t i = 0; i < n; i++)
+    //  Get the platform
+    status = clGetPlatformIDs(1, &platform, NULL);
+    // Get the device
+    status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, num_devices, device, NULL);
+    for (cl_uint j = 0; j < num_devices; j++)
     {
-        if (c1[i] != c3[i])
-            std::cout << i << ",";
+        // Get the device name
+        size_t device_name_size;
+        clGetDeviceInfo(device[d], CL_DEVICE_NAME, 0, NULL, &device_name_size);
+        char *device_name = new char[device_name_size];
+        clGetDeviceInfo(device[d], CL_DEVICE_NAME, device_name_size, device_name, NULL);
+        std::cout << "Using OpenCL device: " << device_name << std::endl;
+        delete[] device_name;
+
+        // Create the context
+        context = clCreateContext(NULL, 1, &device[d], NULL, NULL, &status);
+
+        // Create the program
+
+        program = clCreateProgramWithSource(context, 1, source, NULL, &status);
+        // Build the program
+        status = clBuildProgram(program, 1, &device[d], NULL, NULL, NULL);
+
+        // Create the kernel
+        kernel = clCreateKernel(program, "multiply_arrays", &status);
+
+        // Create the command queue
+        cl_queue_properties properties[] = {CL_QUEUE_PROPERTIES, CL_QUEUE_PROFILING_ENABLE, 0};
+        queue = clCreateCommandQueueWithProperties(context, device[d], properties, &err);
+
+        // Create the buffers
+        bufferA = clCreateBuffer(context, CL_MEM_READ_ONLY, n * sizeof(float), NULL, &status);
+        bufferB = clCreateBuffer(context, CL_MEM_READ_ONLY, n * sizeof(float), NULL, &status);
+        bufferC = clCreateBuffer(context, CL_MEM_READ_WRITE, n * sizeof(float), NULL, &status);
+
+        start_time = std::chrono::high_resolution_clock::now();
+        // Copy data to the buffers
+        status = clEnqueueWriteBuffer(queue, bufferA, CL_TRUE, 0, n * sizeof(float), a, 0, NULL, NULL);
+        status = clEnqueueWriteBuffer(queue, bufferB, CL_TRUE, 0, n * sizeof(float), b, 0, NULL, NULL);
+        // Set the kernel arguments
+        status = clSetKernelArg(kernel, 0, sizeof(cl_mem), (void *)&bufferA);
+        status = clSetKernelArg(kernel, 1, sizeof(cl_mem), (void *)&bufferB);
+        status = clSetKernelArg(kernel, 2, sizeof(cl_mem), (void *)&bufferC);
+
+        // Execute the kernel
+        size_t globalWorkSize[1] = {n};
+        status = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, globalWorkSize, NULL, 0, NULL, NULL);
+
+        // Read the result from the buffer
+        status = clEnqueueReadBuffer(queue, bufferC, CL_TRUE, 0, n * sizeof(float), c3, 0, NULL, NULL);
+        end_time = std::chrono::high_resolution_clock::now();
+        elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+        std::cout << "Method 3 Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
+        // print differences
+        for (size_t i = 0; i < n; i++)
+        {
+            if (c1[i] != c3[i])
+                std::cout << i << ",";
+        }
+        std::cout << std::endl;
     }
-    std::cout << std::endl;
     return 0;
 }
