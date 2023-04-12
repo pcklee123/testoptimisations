@@ -1,13 +1,4 @@
-#include <iostream>
-#include <chrono>
-#include <cstdlib>     // for rand()
-#include <immintrin.h> // Include AVX-512 intrinsics
-#include <emmintrin.h> // include header for SSE instructions
-#include <omp.h>       // Include OpenMP
-#include <stdio.h>
-#include <stdlib.h>
-#define CL_TARGET_OPENCL_VERSION 300
-#include <CL/cl.h>
+#include "main.h"
 
 const char *kernelSource =
     "__kernel void multiply_arrays(__global float* a, __global float* b, __global float* c) {\n"
@@ -33,13 +24,12 @@ int main()
         b[i] = (float)rand() / RAND_MAX;
     }
 
-    // Perform the element-wise multiplication
+    // Perform the element-wise calculations do all calculations for 1 element before moving on to the next element
     auto start_time = std::chrono::high_resolution_clock::now();
-//#pragma omp parallel for 
+
     for (size_t i = 0; i < n; i++)
     {
         c1[i] = a[i] * b[i];
-//#pragma omp parallel for// this wont work cause the data is not continuous and may cause slowdown
         for (size_t j = 0; j < 1024; j++)
             c1[i] *= (c1[i] + 1.0) * (a[i] + 1.0) * (b[i] + 1.0);
     }
@@ -47,19 +37,22 @@ int main()
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
-    std::cout << "#pragma omp parallel (wrong order loops) for Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
+    std::cout << "Method 1 Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
 
-    // Multiply a and b element-wise and store the result in c and then do a lot more multiplications
+    // do all elements and store the result in c before going on to the next step of calculations
     start_time = std::chrono::high_resolution_clock::now();
 #pragma omp parallel for
     for (size_t i = 0; i < n; i++)
         c2[i] = a[i] * b[i];
+#pragma omp barrier
     for (size_t j = 0; j < 1024; j++)
+#pragma omp parallel for
         for (size_t i = 0; i < n; i++)
             c2[i] *= (c2[i] + 1.0) * (a[i] + 1.0) * (b[i] + 1.0);
+#pragma omp barrier
     end_time = std::chrono::high_resolution_clock::now();
     elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    std::cout << "#pragma omp parallel for (better) Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
+    std::cout << "Method 2 Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
     // print differences
     for (size_t i = 0; i < n; i++)
     {
@@ -68,17 +61,6 @@ int main()
     }
     std::cout << std::endl;
 
-    // OpenCL variables
-    cl_platform_id platform;
-    cl_device_id device[3];
-    cl_context context;
-    cl_command_queue queue;
-    cl_program program;
-    cl_kernel kernel;
-    cl_mem bufferA, bufferB, bufferC;
-    cl_int status;
-    cl_int err;
-    int d = 0; // 0 1st device ,1 2nd device
     // Get the platform
     status = clGetPlatformIDs(1, &platform, NULL);
     // Get the device
@@ -128,7 +110,7 @@ int main()
     status = clEnqueueReadBuffer(queue, bufferC, CL_TRUE, 0, n * sizeof(float), c3, 0, NULL, NULL);
     end_time = std::chrono::high_resolution_clock::now();
     elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    std::cout << "OpenCL Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
+    std::cout << "Method 3 Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
     // print differences
     for (size_t i = 0; i < n; i++)
     {
