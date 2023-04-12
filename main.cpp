@@ -6,7 +6,7 @@
 #include <omp.h>       // Include OpenMP
 #include <stdio.h>
 #include <stdlib.h>
-#define CL_HPP_TARGET_OPENCL_VERSION 300
+#define CL_TARGET_OPENCL_VERSION 300
 #include <CL/cl.h>
 
 const char *kernelSource =
@@ -18,13 +18,15 @@ const char *kernelSource =
 
 int main()
 {
-    const size_t n = 1024 * 1024 ;
-    // allocate an array of n integers aligned to a 32-byte boundary
+    const size_t n = 1024 * 1024;
+    // allocate an array of n integers aligned to a 32-byte(256bit) boundary
     float *a = (float *)_mm_malloc(n * sizeof(float), 32);
     float *b = (float *)_mm_malloc(n * sizeof(float), 32);
-    float *c = (float *)_mm_malloc(n * sizeof(float), 32);
+    float *c1 = (float *)_mm_malloc(n * sizeof(float), 32);
+    float *c2 = (float *)_mm_malloc(n * sizeof(float), 32);
+    float *c3 = (float *)_mm_malloc(n * sizeof(float), 32);
 // Initialize a and b with random values
-#pragma omp parallel
+#pragma omp parallel for
     for (size_t i = 0; i < n; i++)
     {
         a[i] = (float)rand() / RAND_MAX;
@@ -33,33 +35,39 @@ int main()
 
     // Perform the element-wise multiplication
     auto start_time = std::chrono::high_resolution_clock::now();
-#pragma omp parallel for
+#pragma omp parallel for 
     for (size_t i = 0; i < n; i++)
     {
-        c[i] = a[i] * b[i];
-#pragma omp parallel for
+        c1[i] = a[i] * b[i];
+#pragma omp parallel for simd
         for (size_t j = 0; j < 256; j++)
-            c[i] *= (c[i] + 1.0) * (a[i] + 1.0) * (b[i] + 1.0);
+            c1[i] *= (c1[i] + 1.0) * (a[i] + 1.0) * (b[i] + 1.0);
     }
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
-    std::cout << "#pragma omp parallel (not optimized) for Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
-    // Print the result
+    std::cout << "#pragma omp parallel (wrong order loops) for Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
 
-    // Multiply a and b element-wise and store the result in c
+    // Multiply a and b element-wise and store the result in c and then do a lot more multiplications
     start_time = std::chrono::high_resolution_clock::now();
 #pragma omp parallel for simd
     for (size_t i = 0; i < n; i++)
-        c[i] = a[i] * b[i];
+        c2[i] = a[i] * b[i];
     for (size_t j = 0; j < 256; j++)
         for (size_t i = 0; i < n; i++)
-            c[i] *= (c[i] + 1.0) * (a[i] + 1.0) * (b[i] + 1.0);
+            c2[i] *= (c2[i] + 1.0) * (a[i] + 1.0) * (b[i] + 1.0);
     end_time = std::chrono::high_resolution_clock::now();
     elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
     std::cout << "#pragma omp parallel for (better) Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
+    // print differences
+    for (size_t i = 0; i < n; i++)
+    {
+        if (c2[i] != c1[i])
+            std::cout << i << ",";
+    }
+    std::cout << std::endl;
 
     // OpenCL variables
     cl_platform_id platform;
@@ -73,7 +81,6 @@ int main()
     cl_int err;
     int d = 0; // 0 1st device ,1 2nd device
     // Get the platform
-
     status = clGetPlatformIDs(1, &platform, NULL);
     // Get the device
     status = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 2, device, NULL);
@@ -103,7 +110,7 @@ int main()
     // Create the buffers
     bufferA = clCreateBuffer(context, CL_MEM_READ_ONLY, n * sizeof(float), NULL, &status);
     bufferB = clCreateBuffer(context, CL_MEM_READ_ONLY, n * sizeof(float), NULL, &status);
-    bufferC = clCreateBuffer(context, CL_MEM_WRITE_ONLY, n * sizeof(float), NULL, &status);
+    bufferC = clCreateBuffer(context, CL_MEM_READ_WRITE, n * sizeof(float), NULL, &status);
 
     start_time = std::chrono::high_resolution_clock::now();
     // Copy data to the buffers
@@ -119,11 +126,16 @@ int main()
     status = clEnqueueNDRangeKernel(queue, kernel, 1, NULL, globalWorkSize, NULL, 0, NULL, NULL);
 
     // Read the result from the buffer
-    status = clEnqueueReadBuffer(queue, bufferC, CL_TRUE, 0, n * sizeof(float), c, 0, NULL, NULL);
+    status = clEnqueueReadBuffer(queue, bufferC, CL_TRUE, 0, n * sizeof(float), c3, 0, NULL, NULL);
     end_time = std::chrono::high_resolution_clock::now();
     elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
     std::cout << "OpenCL multiply Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
-    // Print the result
-
+    // print differences
+    for (size_t i = 0; i < n; i++)
+    {
+        if (c2[i] != c3[i])
+            std::cout << i << ",";
+    }
+    std::cout << std::endl;
     return 0;
 }

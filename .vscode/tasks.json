@@ -8,6 +8,7 @@
                 "-fdiagnostics-color=always",
                 "-g",
                 "-fopenmp",
+                "-fopenmp-simd",
                 "-O3",
                 "-march=native",  
                 "${file}",
