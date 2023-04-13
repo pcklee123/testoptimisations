@@ -19,13 +19,15 @@ int main()
         a[i] = (float)rand() / RAND_MAX;
         b[i] = (float)rand() / RAND_MAX;
     }
-
-    // Perform the element-wise calculations do all calculations for 1 element before moving on to the next element
+    // method 1
+    //  Perform the element-wise calculations do all calculations for 1 element before moving on to the next element
     auto start_time = std::chrono::high_resolution_clock::now();
 
+    // #pragma omp parallel for simd
     for (size_t i = 0; i < n; i++)
     {
         c1[i] = a[i] * b[i];
+        //      #pragma omp  simd
         for (size_t j = 0; j < nn; j++)
             c1[i] *= (c1[i] + 1.0) * (a[i] + 1.0) * (b[i] + 1.0);
     }
@@ -38,15 +40,15 @@ int main()
     // Method 2
     //  do all elements and store the result in c before going on to the next step of calculations
     start_time = std::chrono::high_resolution_clock::now();
-#pragma omp parallel for
+    // #pragma omp parallel for simd
     for (size_t i = 0; i < n; i++)
         c2[i] = a[i] * b[i];
-#pragma omp barrier
+    // #pragma omp barrier
     for (size_t j = 0; j < nn; j++)
-#pragma omp parallel for
+        // #pragma omp parallel for simd
         for (size_t i = 0; i < n; i++)
             c2[i] *= (c2[i] + 1.0) * (a[i] + 1.0) * (b[i] + 1.0);
-#pragma omp barrier
+    // #pragma omp barrier
     end_time = std::chrono::high_resolution_clock::now();
     elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
     std::cout << "Method 2 Elapsed time: " << elapsed_time.count() << " ms" << std::endl;
@@ -146,14 +148,15 @@ int main()
     // Method 4
     // do calculations element by element and store the result in c1
     start_time = std::chrono::high_resolution_clock::now();
-#pragma omp parallel for
+    float temp;
+    #pragma omp parallel for private(temp)
     for (size_t j = 0; j < nn; j++)
     {
         for (size_t i = 0; i < n; i++)
         {
-            float temp = a[i] * b[i];
+            temp = a[i] * b[i];
             temp *= (temp + 1.0) * (a[i] + 1.0) * (b[i] + 1.0);
-#pragma omp atomic
+            // #pragma omp atomic
             c2[i] += temp;
         }
     }
@@ -169,25 +172,27 @@ int main()
     }
     std::cout << std::endl;
 
+    __m256 va, vb, vc, v1, one_vec;
+    //    __m256 va, vb, vc, v1, v2, v3, v4, one_vec;
+    one_vec = _mm256_set1_ps(1.0f);
     // Method 5
     // do all elements and store the result in c2 before going on to the next step of calculations
     start_time = std::chrono::high_resolution_clock::now();
-    __m256 a_vec, b_vec, c2_vec, temp_vec, one_vec;
-    one_vec = _mm256_set1_ps(1.0f);
-#pragma omp parallel for private(a_vec, b_vec, c2_vec, temp_vec)
+
+#pragma omp parallel for private(va, vb, vc, v1)
     for (size_t i = 0; i < n; i += VEC_WIDTH)
     {
-        a_vec = _mm256_loadu_ps(&a[i]);
-        b_vec = _mm256_loadu_ps(&b[i]);
-        c2_vec = _mm256_mul_ps(a_vec, b_vec);
+        va = _mm256_loadu_ps(&a[i]);
+        vb = _mm256_loadu_ps(&b[i]);
+        vc = _mm256_mul_ps(va, vb);
         for (size_t j = 1; j < nn; j++)
         {
-            temp_vec = _mm256_add_ps(c2_vec, one_vec);
-            temp_vec = _mm256_mul_ps(temp_vec, _mm256_add_ps(a_vec, one_vec));
-            temp_vec = _mm256_mul_ps(temp_vec, _mm256_add_ps(b_vec, one_vec));
-            c2_vec = _mm256_mul_ps(c2_vec, temp_vec);
+            v1 = _mm256_add_ps(vc, one_vec);
+            v1 = _mm256_mul_ps(v1, _mm256_add_ps(va, one_vec));
+            v1 = _mm256_mul_ps(v1, _mm256_add_ps(vb, one_vec));
+            vc = _mm256_mul_ps(vc, v1);
         }
-        _mm256_storeu_ps(&c2[i], c2_vec);
+        _mm256_storeu_ps(&c2[i], vc);
     }
 #pragma omp barrier
     end_time = std::chrono::high_resolution_clock::now();
@@ -205,31 +210,39 @@ int main()
     // Method 6
     //  do all elements and store the result in c before going on to the next step of calculations
     start_time = std::chrono::high_resolution_clock::now();
+    //   __m256 va, vb, vc, v1, v2, v3, v4;
 #pragma omp parallel for private(va, vb, vc)
-//#pragma omp parallel for
-    for (size_t i = 0; i < n; i += 8)
+    // #pragma omp parallel for
+    for (size_t i = 0; i < n; i += VEC_WIDTH)
     {
-        __m256 va = _mm256_load_ps(&a[i]);
-        __m256 vb = _mm256_load_ps(&b[i]);
-        __m256 vc = _mm256_mul_ps(va, vb);
+        va = _mm256_load_ps(&a[i]);
+        vb = _mm256_load_ps(&b[i]);
+        vc = _mm256_mul_ps(va, vb);
         _mm256_store_ps(&c2[i], vc);
     }
 #pragma omp barrier
- //   __m256 one_vec;
- //   one_vec = _mm256_set1_ps(1.0f);
+
     for (size_t j = 0; j < nn; j++)
     {
-#pragma omp parallel for private(va, vb, vc,v1,v2,v3,v4)
-#pragma omp parallel for 
-        for (size_t i = 0; i < n; i += 8)
+// #pragma omp parallel for private(va, vb, vc, v1, v2, v3, v4)
+#pragma omp parallel for private(va, vb, vc, v1)
+
+        // #pragma omp parallel for
+        for (size_t i = 0; i < n; i += VEC_WIDTH)
         {
-            __m256 va = _mm256_load_ps(&a[i]);
-            __m256 vb = _mm256_load_ps(&b[i]);
-            __m256 v1 = _mm256_load_ps(&c2[i]);
-            __m256 v2 = _mm256_add_ps(v1, one_vec);
-            __m256 v3 = _mm256_add_ps(_mm256_add_ps(va, one_vec), _mm256_add_ps(vb, one_vec));
-            __m256 v4 = _mm256_mul_ps(_mm256_mul_ps(v2, v3), v1);
-            _mm256_store_ps(&c2[i], v4);
+            va = _mm256_load_ps(&a[i]);
+            vb = _mm256_load_ps(&b[i]);
+            vc = _mm256_load_ps(&c2[i]);
+            v1 = _mm256_add_ps(vc, one_vec);
+            v1 = _mm256_mul_ps(v1, _mm256_add_ps(va, one_vec));
+            v1 = _mm256_mul_ps(v1, _mm256_add_ps(vb, one_vec));
+            vc = _mm256_mul_ps(vc, v1);
+            //           v1 = _mm256_load_ps(&c2[i]);
+            //            v2 = _mm256_add_ps(v1, one_vec);
+            //            v3 = _mm256_add_ps(_mm256_add_ps(va, one_vec), _mm256_add_ps(vb, one_vec));
+            //            v4 = _mm256_mul_ps(_mm256_mul_ps(v2, v3), v1);
+            //            _mm256_store_ps(&c2[i], v4);
+            _mm256_store_ps(&c2[i], vc);
         }
 #pragma omp barrier
     }
