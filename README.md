@@ -1,5 +1,5 @@
 # Test coding styles
-
+a
 ## Method 1:
 ### 1a Base code 
     for (size_t i = 0; i < n; i++)
