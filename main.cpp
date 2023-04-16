@@ -388,7 +388,7 @@ int main()
             std::cout << i << ",";
     }
     std::cout << std::endl;
-
+/*
     // method 3d
     //  #pragma omp parallel for
     for (cl_uint j = 0; j < num_devices; j++)
@@ -435,5 +435,6 @@ int main()
         }
         std::cout << std::endl;
     }
+    */
     return 0;
 }
